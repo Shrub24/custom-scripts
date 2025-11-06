@@ -14,13 +14,13 @@ from xdg import BaseDirectory
 from typing import Any, Optional
 
 # Suite name for all niri scripts
-SUITE_NAME = "niri-scripts"
+SUITE_NAME = "custom-scripts"
 
 
 class NiriScriptConfig:
     """Manages XDG-compliant configuration and state for niri scripts."""
 
-    def __init__(self, script_name: str, load_config: bool = True):
+    def __init__(self, module_name: str, script_name: str, load_config: bool = True):
         """
         Initialize script configuration.
 
@@ -31,12 +31,16 @@ class NiriScriptConfig:
         # Validate script_name: must be a non-empty string
         if not isinstance(script_name, str) or not script_name.strip():
             raise ValueError("script_name must be a non-empty string")
+        if not isinstance(module_name, str) or not module_name.strip():
+            raise ValueError("module_name must be a non-empty string")
+        
+        self.module_name = module_name
         self.script_name = script_name
 
         # Setup XDG-compliant directories
         # BaseDirectory functions may return paths with ~ that need expansion
-        self.config_dir = Path(BaseDirectory.save_config_path(SUITE_NAME))
-        self.state_dir = Path(BaseDirectory.save_state_path(SUITE_NAME))
+        self.config_dir = Path(BaseDirectory.save_config_path(SUITE_NAME)) / module_name
+        self.state_dir = Path(BaseDirectory.save_state_path(SUITE_NAME)) / module_name
 
         # Script-specific paths
         self.log_file = self.state_dir / f"{script_name}.log"

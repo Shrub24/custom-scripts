@@ -12,7 +12,7 @@ import sys
 from niri_helpers import NiriScriptConfig, NiriIPC
 
 # Initialize script configuration
-script_config = NiriScriptConfig("window-glancer", load_config=True)
+script_config = NiriScriptConfig("niri", "window-glancer", load_config=True)
 log = script_config.setup_logging(level="DEBUG")
 niri = NiriIPC()
 

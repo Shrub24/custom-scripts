@@ -20,7 +20,7 @@ from socket import AF_UNIX, SHUT_WR, socket
 from niri_helpers import NiriScriptConfig, NiriIPC
 
 # Initialize script configuration
-script_config = NiriScriptConfig("dynamic-float", load_config=True)
+script_config = NiriScriptConfig("niri", "dynamic-float", load_config=True)
 log = script_config.setup_logging(level="DEBUG")
 niri = NiriIPC()
 

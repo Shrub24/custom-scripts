@@ -11,7 +11,7 @@ import time
 from niri_helpers import NiriScriptConfig, NiriIPC
 
 # Initialize script configuration
-script_config = NiriScriptConfig("launch-music", load_config=True)
+script_config = NiriScriptConfig("niri", "launch-music", load_config=True)
 log = script_config.setup_logging(level="INFO")
 niri = NiriIPC()
     
