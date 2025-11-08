@@ -159,3 +159,4 @@ for line in file:
     elif changed := event.get("WindowClosed"):
         del windows[changed["id"]]
 
+

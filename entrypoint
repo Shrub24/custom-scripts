@@ -1,0 +1,52 @@
+#!/bin/bash
+set -euo pipefail
+
+# --- 1. Load Configuration ---
+# Find the config file
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/custom-scripts"
+CONFIG_FILE="$CONFIG_DIR/config.toml"
+
+# Check if config exists and load it
+if [ -f "$CONFIG_FILE" ]; then
+    # 'source' loads the variables (e.g., PKG_BASE_DIR) from the file
+    source "$CONFIG_FILE"
+else
+    echo "Error: Config file not found at $CONFIG_FILE" >&2
+    echo "Please run the install.sh script from your 'custom-scripts' repo." >&2
+    exit 1
+fi
+
+# Check that the variable was loaded
+if [ -z "$PKG_BASE_DIR" ]; then
+    echo "Error: PKG_BASE_DIR not set in $CONFIG_FILE." >&2
+    exit 1
+fi
+# --- (End of new logic) ---
+
+
+# --- 2. Execute Package ---
+# (This logic is now the same as before, but $PKG_BASE_DIR is dynamic)
+PACKAGE_NAME=$1
+shift # Get the package name
+
+PKG_DIR="$PKG_BASE_DIR/modules/$PACKAGE_NAME"
+
+if [ ! -d "$PKG_DIR" ]; then
+    echo "Error: Package '$PACKAGE_NAME' not found under modules/." >&2
+    echo "Expected directory: $PKG_DIR" >&2
+    exit 1
+fi
+VENV_DIR="$PKG_DIR/.venv"
+VENV_PYTHON="$VENV_DIR/bin/python"
+PKG_MAIN_PY="$PKG_DIR/main.py"
+
+# Check if the package and its venv exist
+if [ ! -f "$VENV_PYTHON" ]; then
+    echo "Error: Package '$PACKAGE_NAME' or its venv not found." >&2
+    echo "Expected venv at: $VENV_DIR" >&2
+    echo "Try re-running the install.sh script." >&2
+    exit 1
+fi
+
+# Execute the package's main.py with its venv and all remaining args
+exec "$VENV_PYTHON" "$PKG_MAIN_PY" "$@"
