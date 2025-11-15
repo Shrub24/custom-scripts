@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,7 @@ class ScriptConfig:
     This class is generic and can be used by any module within the repository.
     """
 
-    def __init__(self, module_name: str, script_name: str, load_config: bool = True):
+    def __init__(self, module_name: str, script_name: str, load_config: bool = True, module_dir: Path | None = None):
         if not isinstance(script_name, str) or not script_name.strip():
             raise ValueError("script_name must be a non-empty string")
         if not isinstance(module_name, str) or not module_name.strip():
@@ -34,6 +35,7 @@ class ScriptConfig:
 
         self.module_name = module_name
         self.script_name = script_name
+        self.module_dir = module_dir  # Optional: physical module directory
 
         # XDG-compliant directories
         self.config_dir = Path(BaseDirectory.save_config_path(SUITE_NAME)) / module_name
@@ -59,9 +61,19 @@ class ScriptConfig:
 
         # Load configuration if available
         self.config: dict[str, Any] = {}
-        if load_config and self.config_file.exists():
-            with open(self.config_file, "rb") as f:
-                self.config = tomllib.load(f)
+        if load_config:
+            # Load general suite config from ~/.config/custom-scripts/config.toml (if exists)
+            # Note: The shell config.sh is only for bash entrypoint, not Python
+            general_config_path = Path(BaseDirectory.save_config_path(SUITE_NAME)) / "config.toml"
+            if general_config_path.exists():
+                with open(general_config_path, "rb") as f:
+                    self.config = tomllib.load(f)
+            
+            # Load module-specific config and merge (module config takes precedence)
+            if self.config_file.exists():
+                with open(self.config_file, "rb") as f:
+                    module_config = tomllib.load(f)
+                    self.config.update(module_config)
 
     def get_config_value(self, key: str, default: Any | None = None) -> Any:
         """Return a possibly expanded configuration value or default."""
@@ -126,5 +138,16 @@ class ScriptConfig:
                 json.dump(state, f, indent=2)
         except (IOError, OSError) as e:
             logging.getLogger(self.script_name).error("Failed to save state: %s", e)
+
+    def get_config_path(self, filename: str) -> Path:
+        """Get a path to a config file in the module's config directory.
+        
+        Args:
+            filename: Name of the config file
+            
+        Returns:
+            Path to the config file (may not exist)
+        """
+        return self.config_dir / filename
 
 

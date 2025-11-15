@@ -4,11 +4,11 @@ set -euo pipefail
 # --- 1. Load Configuration ---
 # Find the config file
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/custom-scripts"
-CONFIG_FILE="$CONFIG_DIR/config.toml"
+CONFIG_FILE="$CONFIG_DIR/config.sh"
 
 # Check if config exists and load it
 if [ -f "$CONFIG_FILE" ]; then
-    # 'source' loads the variables (e.g., PKG_BASE_DIR) from the file
+    # Source the shell config file
     source "$CONFIG_FILE"
 else
     echo "Error: Config file not found at $CONFIG_FILE" >&2
@@ -40,13 +40,30 @@ VENV_DIR="$PKG_DIR/.venv"
 VENV_PYTHON="$VENV_DIR/bin/python"
 PKG_MAIN_PY="$PKG_DIR/main.py"
 
-# Check if the package and its venv exist
-if [ ! -f "$VENV_PYTHON" ]; then
-    echo "Error: Package '$PACKAGE_NAME' or its venv not found." >&2
-    echo "Expected venv at: $VENV_DIR" >&2
-    echo "Try re-running the install.sh script." >&2
+# Determine module type and execute accordingly
+if [ -f "$PKG_MAIN_PY" ]; then
+    # Python module - check if it's a package (has __init__.py)
+    if [ -f "$PKG_DIR/__init__.py" ]; then
+        # Run as module to enable relative imports
+        if [ -f "$VENV_PYTHON" ]; then
+            cd "$PKG_DIR/.." && exec "$VENV_PYTHON" -m "$PACKAGE_NAME.main" "$@"
+        else
+            echo "Warning: No venv found for module '$PACKAGE_NAME', using system python" >&2
+            cd "$PKG_DIR/.." && exec python3 -m "$PACKAGE_NAME.main" "$@"
+        fi
+    else
+        # Run as script
+        if [ -f "$VENV_PYTHON" ]; then
+            exec "$VENV_PYTHON" "$PKG_MAIN_PY" "$@"
+        else
+            echo "Warning: No venv found for module '$PACKAGE_NAME', using system python" >&2
+            exec python3 "$PKG_MAIN_PY" "$@"
+        fi
+    fi
+elif [ -f "$PKG_DIR/main.sh" ]; then
+    # Shell script module
+    exec "$PKG_DIR/main.sh" "$@"
+else
+    echo "Error: No main.py or main.sh found in package '$PACKAGE_NAME'." >&2
     exit 1
 fi
-
-# Execute the package's main.py with its venv and all remaining args
-exec "$VENV_PYTHON" "$PKG_MAIN_PY" "$@"

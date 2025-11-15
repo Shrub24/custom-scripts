@@ -9,7 +9,7 @@
 
 import re
 import sys
-from niri_helpers import NiriScriptConfig, NiriIPC
+from .niri_helpers import NiriScriptConfig, NiriIPC
 
 # Initialize script configuration
 script_config = NiriScriptConfig("niri", "window-glancer", load_config=True)
@@ -163,11 +163,19 @@ def toggle():
         log.info("Toggling from glance to primary")
         return move_to_primary()
 
-def main():
-    log.info("Script started with args: %s", sys.argv)
+def main(args=None):
+    """Main entry point for window glancer.
     
-    if len(sys.argv) > 1:
-        cmd = sys.argv[1]
+    Args:
+        args: List of arguments (defaults to sys.argv[1:])
+    """
+    if args is None:
+        args = sys.argv[1:]
+    
+    log.info("Script started with args: %s", args)
+    
+    if len(args) > 0:
+        cmd = args[0]
         if cmd == "primary":
             success = move_to_primary()
         elif cmd == "glance":
@@ -175,15 +183,15 @@ def main():
         elif cmd == "toggle":
             success = toggle()
         else:
-            print(f"Usage: {sys.argv[0]} [primary|glance|toggle]", file=sys.stderr)
-            sys.exit(1)
+            print(f"Usage: window-glancer [primary|glance|toggle]", file=sys.stderr)
+            return 1
     else:
         success = toggle()
     
     log.info("Script finished with success=%s", success)
-    sys.exit(0 if success else 1)
+    return 0 if success else 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
 
 

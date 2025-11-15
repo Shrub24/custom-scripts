@@ -9,17 +9,21 @@ REPO_ROOT=$(dirname "$(readlink -f "$0")")
 echo "Writing config file..."
 # Use the XDG standard, default to ~/.config/run-custom
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/custom-scripts"
-CONFIG_FILE="$CONFIG_DIR/config.toml"
+CONFIG_FILE="$CONFIG_DIR/config.sh"
 
 # Ensure the config directory exists
 mkdir -p "$CONFIG_DIR"
 
-# Write the path of the repo to the config file
+# Write the path of the repo to the config file in shell format
 # This will overwrite any old path
-echo "PKG_BASE_DIR=$REPO_ROOT" > "$CONFIG_FILE"
+cat > "$CONFIG_FILE" << EOF
+# Custom scripts configuration
+PKG_BASE_DIR="$REPO_ROOT"
+EOF
 echo "Config written to $CONFIG_FILE"
 
-# --- 2. Install/Update the 'run-custom' Entrypoint ---
+
+# --- 3. Install/Update the 'run-custom' Entrypoint ---
 echo "Installing 'run-custom' entrypoint to ~/.local/bin..."
 DEST_BIN_DIR="$HOME/.local/bin"
 DEST_SCRIPT="$DEST_BIN_DIR/run-custom"
@@ -50,7 +54,7 @@ for module_dir in "$MODULES_DIR"/*; do
         if [ -f "$install_script" ]; then
             echo "Installing module: $module_name"
             chmod +x "$install_script"
-            (cd "$module_dir" && ./install-module.sh)
+            (cd "$module_dir" && ./install-module.sh "$REPO_ROOT")
         else
             echo "Skipping module '$module_name' (no install.sh found)"
         fi

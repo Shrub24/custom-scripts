@@ -1,37 +1,13 @@
 import argparse
-import subprocess
 import sys
 from pathlib import Path
+
+from helpers import get_module_directory
 
 
 def get_scripts_directory() -> Path:
     """Return the absolute directory containing this file."""
-    return Path(__file__).resolve().parent
-
-
-def build_command(script_filename: str, extra_args: list[str] | None = None) -> list[str]:
-    """Build a command to execute a sibling script with the current Python.
-
-    Args:
-        script_filename: The name of the script file to run (e.g., "launch-music.py").
-        extra_args: Additional CLI arguments to pass through to the script.
-
-    Returns:
-        A list suitable for subprocess execution.
-    """
-    script_path = get_scripts_directory() / script_filename
-    if not script_path.exists():
-        raise FileNotFoundError(f"Script not found: {script_path}")
-    cmd = [sys.executable, str(script_path)]
-    if extra_args:
-        cmd.extend(extra_args)
-    return cmd
-
-
-def run_command(cmd: list[str]) -> int:
-    """Run a command and return its exit code."""
-    completed = subprocess.run(cmd, check=False)
-    return completed.returncode
+    return get_module_directory(__file__)
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -74,25 +50,23 @@ def main(argv: list[str]) -> int:
     parser = create_parser()
     args = parser.parse_args(argv)
 
-    # Map subcommands to script filenames
-    script_map: dict[str, str] = {
-        "launch-music": "launch-music.py",
-        "window-glancer": "window-glancer.py",
-        "dynamic-float": "dynamic-float.py",
-    }
-
+    # Import the actual script modules and call their main functions
+    # This works because we're running as a package with python -m
+    
     if args.command == "launch-music":
-        return run_command(build_command(script_map["launch-music"]))
-
+        from . import launch_music
+        return launch_music.main()
+    
     if args.command == "window-glancer":
-        passthrough = []
+        from . import window_glancer
+        glancer_args = []
         if getattr(args, "glancer_cmd", None):
-            passthrough = [args.glancer_cmd]
-        return run_command(build_command(script_map["window-glancer"], passthrough))
-
+            glancer_args = [args.glancer_cmd]
+        return window_glancer.main(glancer_args)
+    
     if args.command == "dynamic-float":
-        # long-running; just exec and adopt its exit code when it ends
-        return run_command(build_command(script_map["dynamic-float"]))
+        from . import dynamic_float
+        return dynamic_float.main()
 
     # Should not reach here because subparser requires a command
     parser.print_help()

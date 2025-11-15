@@ -8,7 +8,7 @@
 import subprocess
 import sys
 import time
-from niri_helpers import NiriScriptConfig, NiriIPC
+from .niri_helpers import NiriScriptConfig, NiriIPC
 
 # Initialize script configuration
 script_config = NiriScriptConfig("niri", "launch-music", load_config=True)

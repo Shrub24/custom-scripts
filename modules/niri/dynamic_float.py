@@ -17,7 +17,7 @@ import json
 import os
 import re
 from socket import AF_UNIX, SHUT_WR, socket
-from niri_helpers import NiriScriptConfig, NiriIPC
+from .niri_helpers import NiriScriptConfig, NiriIPC
 
 # Initialize script configuration
 script_config = NiriScriptConfig("niri", "dynamic-float", load_config=True)
@@ -78,24 +78,6 @@ def load_rules_from_config():
     
     return rules
 
-RULES = load_rules_from_config()
-
-if not RULES:
-    log.error("No rules configured in dynamic-float.toml")
-    raise SystemExit(1)
-
-
-# Setup event stream
-niri_socket = socket(AF_UNIX)
-niri_socket.connect(os.environ["NIRI_SOCKET"])
-file = niri_socket.makefile("rw")
-
-_ = file.write('"EventStream"')
-file.flush()
-niri_socket.shutdown(SHUT_WR)
-
-windows = {}
-
 
 def float_window(window_id: int):
     """Float a window."""
@@ -117,46 +99,67 @@ def set_centered(window_id: int, width: int, height: int):
 
     # adjust for top left origin
     niri.send_action({"MoveFloatingWindow":
-                      {"id": window_id, "x": {"AdjustFixed": -(width / 2)}, "y": {"AdjustFixed": height/4}}})
-
-def update_matched(window):
-    """Check if window matches any rules and apply floating/sizing."""
-    window["matched"] = False
-    if existing := windows.get(window["id"]):
-        window["matched"] = existing["matched"]
-
-    matched_before = window["matched"]
-    matched_rule = None
-    for rule in RULES:
-        if rule.matches(window):
-            window["matched"] = True
-            matched_rule = rule
-            break
-    
-    if window["matched"] and not matched_before and matched_rule:
-        log.info("Floating window: title=%s, app_id=%s", window['title'], window['app_id'])
-        window_id = window["id"]
-        float_window(window_id)
-        if matched_rule.height:
-            set_height(window_id, matched_rule.height)
-        if matched_rule.width:
-            set_width(window_id, matched_rule.width)
-        if matched_rule.centered:
-            set_centered(window_id, matched_rule.width, matched_rule.height)
+                      {"id": window_id, "x": {"AdjustFixed": -(width / 2)}, "y": {"AdjustFixed": -height/2}}})
 
 
-for line in file:
-    event = json.loads(line)
+def main():
+    """Main entry point for dynamic float script."""
+    RULES = load_rules_from_config()
 
-    if changed := event.get("WindowsChanged"):
-        for win in changed["windows"]:
+    if not RULES:
+        log.error("No rules configured in dynamic-float.toml")
+        return 1
+
+    # Setup event stream
+    niri_socket = socket(AF_UNIX)
+    niri_socket.connect(os.environ["NIRI_SOCKET"])
+    file = niri_socket.makefile("rw")
+
+    _ = file.write('"EventStream"')
+    file.flush()
+    niri_socket.shutdown(SHUT_WR)
+
+    windows = {}
+
+    def update_matched(window):
+        """Update window matching state."""
+        matched_before = window.get("matched", False)
+        window["matched"] = False
+        matched_rule = None
+        
+        for rule in RULES:
+            if rule.matches(window):
+                window["matched"] = True
+                matched_rule = rule
+                break
+        
+        if window["matched"] and not matched_before and matched_rule:
+            log.info("Floating window: title=%s, app_id=%s", window['title'], window['app_id'])
+            window_id = window["id"]
+            float_window(window_id)
+            if matched_rule.height:
+                set_height(window_id, matched_rule.height)
+            if matched_rule.width:
+                set_width(window_id, matched_rule.width)
+            if matched_rule.centered:
+                set_centered(window_id, matched_rule.width, matched_rule.height)
+
+    for line in file:
+        event = json.loads(line)
+
+        if changed := event.get("WindowsChanged"):
+            for win in changed["windows"]:
+                update_matched(win)
+            windows = {win["id"]: win for win in changed["windows"]}
+        elif changed := event.get("WindowOpenedOrChanged"):
+            win = changed["window"]
             update_matched(win)
-        windows = {win["id"]: win for win in changed["windows"]}
-    elif changed := event.get("WindowOpenedOrChanged"):
-        win = changed["window"]
-        update_matched(win)
-        windows[win["id"]] = win
-    elif changed := event.get("WindowClosed"):
-        del windows[changed["id"]]
+            windows[win["id"]] = win
+        elif changed := event.get("WindowClosed"):
+            del windows[changed["id"]]
+    
+    # Event stream ended (shouldn't happen under normal circumstances)
+    log.warning("Event stream ended unexpectedly")
+    return 0
 
 

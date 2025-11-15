@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
-# This script installs dependencies for the 'niri' module.
+# This script installs dependencies for the 'theme' module.
 
-echo "  (niri) Setting up venv..."
-pkg_dir=$(dirname "$(readlink -f "$0")") # This is the niri/ directory
+echo "  (theme) Setting up venv..."
+pkg_dir=$(dirname "$(readlink -f "$0")") # This is the theme/ directory
 repo_root="${1:-$pkg_dir/../..}" # Passed as arg or fallback
 venv_dir="$pkg_dir/.venv"
 
@@ -18,4 +18,4 @@ fi
 # 3. Install helpers package in editable mode
 (cd "$pkg_dir" && uv pip install -e "$repo_root")
 
-echo "  (niri) Venv is up to date."
+echo "  (theme) Venv is up to date."
