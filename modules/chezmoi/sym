@@ -5,8 +5,10 @@
 # Examples: 
 #   chezmoi-sym add ~/.config/myapp/settings.json
 #   chezmoi-sym add -v ~/.config/myapp/settings.json
+#   chezmoi-sym add ~/.config/myapp/
 #   chezmoi-sym remove ~/.config/myapp/settings.json
 #   chezmoi-sym remove -v ~/.config/myapp/settings.json
+#   chezmoi-sym remove ~/.config/myapp/
 #
 
 set -e
@@ -16,8 +18,8 @@ show_usage() {
     echo "Usage: chezmoi-sym [add|remove] [-v|--verbose] [path]"
     echo ""
     echo "Commands:"
-    echo "  add     Add a file to chezmoi as a symlink"
-    echo "  remove  Remove a symlinked file from chezmoi"
+    echo "  add     Add a file or directory to chezmoi as symlinks"
+    echo "  remove  Remove symlinked files or directories from chezmoi"
     echo ""
     echo "Options:"
     echo "  -v, --verbose  Show detailed operation logs"
@@ -25,8 +27,10 @@ show_usage() {
     echo "Examples:"
     echo "  chezmoi-sym add ~/.config/myapp/settings.json"
     echo "  chezmoi-sym add -v ~/.config/myapp/settings.json"
+    echo "  chezmoi-sym add ~/.config/myapp/"
     echo "  chezmoi-sym remove ~/.config/myapp/settings.json"
     echo "  chezmoi-sym remove -v ~/.config/myapp/settings.json"
+    echo "  chezmoi-sym remove ~/.config/myapp/"
 }
 
 # Helper function for verbose output
@@ -87,50 +91,52 @@ log_verbose "Target file: $file_path"
 chezmoi_source_dir="$(chezmoi source-path)"
 log_verbose "Chezmoi source directory: $chezmoi_source_dir"
 
-#######################################
-# ADD COMMAND
-#######################################
-if [[ "$COMMAND" == "add" ]]; then
+# Helper function to add a single file
+add_single_file() {
+    local file_path="$1"
+    
+    log_verbose "Processing file: $file_path"
+    
     # Check if file exists
     if [[ ! -e "$file_path" ]]; then
         echo "Error: File '$file_path' does not exist"
-        exit 1
+        return 1
     fi
-    log_verbose "File exists, proceeding with add..."
 
     # Add the file to chezmoi with --template flag
     log_verbose "Running: chezmoi add --template \"$file_path\""
     chezmoi add --template "$file_path"
 
     # Get the source path for the added file
+    local chezmoi_file
     chezmoi_file="$(chezmoi source-path "$file_path")"
     log_verbose "Chezmoi file path: $chezmoi_file"
 
     # The file should have .tmpl extension from chezmoi add --template
-    chezmoi_base="${chezmoi_file%.tmpl}"
-    chezmoi_dir="$(dirname "$chezmoi_base")"
-    chezmoi_filename="$(basename "$chezmoi_base")"
+    local chezmoi_base="${chezmoi_file%.tmpl}"
+    local chezmoi_dir="$(dirname "$chezmoi_base")"
+    local chezmoi_filename="$(basename "$chezmoi_base")"
     log_verbose "Base path: $chezmoi_base"
     log_verbose "Directory: $chezmoi_dir"
     log_verbose "Filename: $chezmoi_filename"
 
     # Add symlink_ prefix to the filename
-    new_chezmoi_file="$chezmoi_dir/symlink_$chezmoi_filename.tmpl"
+    local new_chezmoi_file="$chezmoi_dir/symlink_$chezmoi_filename.tmpl"
 
     # Rename the template file to add symlink_ prefix
     log_verbose "Moving: $chezmoi_file -> $new_chezmoi_file"
     mv "$chezmoi_file" "$new_chezmoi_file"
 
     # Determine relative path from chezmoi source dir for the symlink destination
-    rel_path="${chezmoi_base#$chezmoi_source_dir/}"
+    local rel_path="${chezmoi_base#$chezmoi_source_dir/}"
     log_verbose "Relative path: $rel_path"
 
     # Determine the symlink destination path
-    symlink_dest="$chezmoi_source_dir/symlinks/$rel_path"
+    local symlink_dest="$chezmoi_source_dir/symlinks/$rel_path"
     log_verbose "Symlink destination: $symlink_dest"
 
     # Create directory structure for symlink if needed
-    symlink_dir="$(dirname "$symlink_dest")"
+    local symlink_dir="$(dirname "$symlink_dest")"
     if [[ ! -d "$symlink_dir" ]]; then
         log_verbose "Creating directory structure for symlink: $symlink_dir"
         mkdir -p "$symlink_dir"
@@ -149,40 +155,61 @@ if [[ "$COMMAND" == "add" ]]; then
     log_verbose "  Symlink target: $symlink_dest"
     log_verbose "  Template file: $new_chezmoi_file"
     log_verbose ""
-    log_verbose "Next steps:"
-    log_verbose "  1. Run 'chezmoi apply' to create the symlink"
-    log_verbose "  2. Consider running 'git add' in the chezmoi source directory"
+}
 
-#######################################
-# REMOVE COMMAND
-#######################################
-elif [[ "$COMMAND" == "remove" ]]; then
+# Helper function to remove a single file
+remove_single_file() {
+    local file_path="$1"
+    
+    log_verbose "Processing file: $file_path"
+    
     # Get the chezmoi source path for the file
+    local chezmoi_file
     chezmoi_file="$(chezmoi source-path "$file_path" 2>/dev/null || echo "")"
 
     if [[ -z "$chezmoi_file" ]]; then
-        echo "Error: File '$file_path' is not managed by chezmoi"
-        exit 1
+        echo "Warning: File '$file_path' is not managed by chezmoi, skipping"
+        return 0
     fi
     log_verbose "Chezmoi source file: $chezmoi_file"
 
     # Check if it's a symlinked file (has symlink_ prefix)
-    chezmoi_filename="$(basename "$chezmoi_file")"
+    local chezmoi_filename="$(basename "$chezmoi_file")"
     if [[ ! "$chezmoi_filename" =~ ^symlink_ ]]; then
-        echo "Warning: File '$file_path' doesn't appear to be a symlinked file (no 'symlink_' prefix)"
-        echo "Use 'chezmoi forget' instead for regular files"
-        exit 1
+        echo "Warning: File '$file_path' doesn't appear to be a symlinked file (no 'symlink_' prefix), skipping"
+        return 0
     fi
 
     # Determine the symlink target path in the symlinks directory
-    chezmoi_base="${chezmoi_file%.tmpl}"
-    chezmoi_dir="$(dirname "$chezmoi_base")"
-    chezmoi_base_filename="$(basename "$chezmoi_base")"
+    local chezmoi_base="${chezmoi_file%.tmpl}"
+    local chezmoi_dir="$(dirname "$chezmoi_base")"
+    local chezmoi_base_filename="$(basename "$chezmoi_base")"
     # Remove symlink_ prefix
-    chezmoi_base_no_prefix="$chezmoi_dir/${chezmoi_base_filename#symlink_}"
-    rel_path="${chezmoi_base_no_prefix#$chezmoi_source_dir/}"
-    symlink_target="$chezmoi_source_dir/symlinks/$rel_path"
+    local chezmoi_base_no_prefix="$chezmoi_dir/${chezmoi_base_filename#symlink_}"
+    local rel_path="${chezmoi_base_no_prefix#$chezmoi_source_dir/}"
+    local symlink_target="$chezmoi_source_dir/symlinks/$rel_path"
     log_verbose "Symlink target: $symlink_target"
+
+    # Copy the symlink target back to the original location if it exists
+    if [[ -f "$symlink_target" ]]; then
+        # Check if the current file is a symlink
+        if [[ -L "$file_path" ]]; then
+            log_verbose "Removing existing symlink at: $file_path"
+            rm "$file_path"
+        fi
+        
+        # Create directory structure if needed
+        local file_dir="$(dirname "$file_path")"
+        if [[ ! -d "$file_dir" ]]; then
+            log_verbose "Creating directory structure: $file_dir"
+            mkdir -p "$file_dir"
+        fi
+        
+        log_verbose "Copying: $symlink_target -> $file_path"
+        cp "$symlink_target" "$file_path"
+    else
+        log_verbose "Symlink target not found: $symlink_target (cannot restore file)"
+    fi
 
     # Use chezmoi forget to remove the template file
     log_verbose "Running: chezmoi forget \"$file_path\""
@@ -194,22 +221,73 @@ elif [[ "$COMMAND" == "remove" ]]; then
         rm "$symlink_target"
         
         # Clean up empty parent directories
-        symlink_dir="$(dirname "$symlink_target")"
+        local symlink_dir="$(dirname "$symlink_target")"
         log_verbose "Checking for empty directories to clean up"
         while [[ "$symlink_dir" != "$chezmoi_source_dir/symlinks" ]] && [[ -d "$symlink_dir" ]] && [[ -z "$(ls -A "$symlink_dir")" ]]; do
             log_verbose "Removing empty directory: $symlink_dir"
             rmdir "$symlink_dir"
             symlink_dir="$(dirname "$symlink_dir")"
         done
-    else
-        log_verbose "Symlink target not found: $symlink_target"
     fi
 
     log_verbose "✓ Successfully removed symlinked file from chezmoi"
-    log_verbose "  Original file: $file_path"
+    log_verbose "  Original file: $file_path (restored from symlink target)"
     log_verbose "  Template removed: $chezmoi_file"
     log_verbose "  Target removed: $symlink_target"
     log_verbose ""
-    log_verbose "Note: The original file at '$file_path' was not deleted."
-    log_verbose "      Consider running 'chezmoi apply' to clean up any remaining symlinks."
+}
+
+#######################################
+# ADD COMMAND
+#######################################
+if [[ "$COMMAND" == "add" ]]; then
+    # Check if path exists
+    if [[ ! -e "$file_path" ]]; then
+        echo "Error: Path '$file_path' does not exist"
+        exit 1
+    fi
+    
+    # Handle directory recursively
+    if [[ -d "$file_path" ]]; then
+        log_verbose "Directory detected, processing recursively..."
+        
+        # Find all files in directory (not directories themselves)
+        while IFS= read -r -d '' file; do
+            add_single_file "$file"
+        done < <(find "$file_path" -type f -print0)
+        
+        log_verbose ""
+        log_verbose "Next steps:"
+        log_verbose "  1. Run 'chezmoi apply' to create the symlinks"
+        log_verbose "  2. Consider running 'git add' in the chezmoi source directory"
+    else
+        # Single file
+        add_single_file "$file_path"
+        
+        log_verbose ""
+        log_verbose "Next steps:"
+        log_verbose "  1. Run 'chezmoi apply' to create the symlink"
+        log_verbose "  2. Consider running 'git add' in the chezmoi source directory"
+    fi
+
+#######################################
+# REMOVE COMMAND
+#######################################
+elif [[ "$COMMAND" == "remove" ]]; then
+    # Check if path exists in chezmoi
+    if [[ -d "$file_path" ]]; then
+        log_verbose "Directory detected, processing recursively..."
+        
+        # Find all files in directory (not directories themselves)
+        while IFS= read -r -d '' file; do
+            remove_single_file "$file"
+        done < <(find "$file_path" -type f -print0)
+        
+        log_verbose "Files have been restored from their symlink targets to their original locations."
+    else
+        # Single file
+        remove_single_file "$file_path"
+        
+        log_verbose "File has been restored from symlink target to its original location."
+    fi
 fi

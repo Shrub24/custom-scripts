@@ -190,7 +190,7 @@ def wallpaper_changed(wallpaper_path: Path, verbose: bool = False) -> None:
     logger.info("Color schemes generated successfully!")
     
     # Run post-processing scripts to apply themes to running applications
-    run_post_processing(config, verbose)
+    # run_post_processing(config, verbose)
 
 
 def run_post_processing(config: ScriptConfig, verbose: bool = False) -> None:
